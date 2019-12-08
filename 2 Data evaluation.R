@@ -1,6 +1,7 @@
 library(eeptools)
 library(janitor)
 library(odbc)
+library(gridExtra)
 library(DBI)
 library(dplyr)
 library(lubridate)
@@ -11,6 +12,7 @@ library(httr)
 library(readxl)
 library(Hmisc)
 library(gt)
+library(webshot)
 
 #1. Load relevant datasets
 
@@ -147,7 +149,7 @@ INMATE_ACTIVE_FULL <- read_rds("clean-data/INMATE_ACTIVE_FULL.rds")
         cell_text(weight = "bold")
       ),
       locations = cells_data(
-        columns = vars(`Re-enfranchised voters`,`Potential of Amendment 4 to swing the vote`),
+        columns = vars(County, `Incumbent party`, `2018 margin of victory`, `Re-enfranchised voters`,`Potential of Amendment 4 to swing the vote`),
         rows = `Potential of Amendment 4 to swing the vote` == "Yes"))%>%
   tab_style(
     style = list(
@@ -155,8 +157,34 @@ INMATE_ACTIVE_FULL <- read_rds("clean-data/INMATE_ACTIVE_FULL.rds")
       cell_text(weight = "bold")
     ),
   locations = cells_data(
-    columns = vars(`Expected add. margin`, `Expected marginal advantage`, `Amendment 4 expected to swing vote`),
+    columns = vars(County, `Incumbent party`, `2018 margin of victory`, `Re-enfranchised voters`, `Potential of Amendment 4 to swing the vote`, `Expected add. margin`, `Expected marginal advantage`, `Amendment 4 expected to swing vote`),
     rows = `Amendment 4 expected to swing vote` == "Yes"))
+  
+  
+  table_2 <- Elections_2020_table %>%
+    filter(`Potential of Amendment 4 to swing the vote` =="Yes") %>%
+    gt()%>%
+    tab_header(
+      title = "The electoral significance of Amendment 4 in 2020") %>%
+    tab_spanner(
+      label = "2018 midterm results",
+      columns = vars("Incumbent party", "2018 margin of victory")) %>%
+    tab_spanner(
+      label = "2020 projection",
+      columns = vars("Re-enfranchised voters", "Potential of Amendment 4 to swing the vote", "Expected add. margin", "Expected marginal advantage", "Amendment 4 expected to swing vote")) %>%
+    tab_style(
+      style = list(
+        cell_fill(color = "#add8e6"),
+        cell_text(weight = "bold")
+      ),
+      locations = cells_data(
+        columns = vars(County, `Incumbent party`, `2018 margin of victory`, `Re-enfranchised voters`, `Potential of Amendment 4 to swing the vote`, `Expected add. margin`, `Expected marginal advantage`, `Amendment 4 expected to swing vote`),
+        rows = `Amendment 4 expected to swing vote` == "Yes"))
+  
+  
+  gtsave(table_1, "Counties.png")
+  
+   write.csv(Elections_2020_table, file = "Elections_2020_table.csv")
   
   # NEED TO: Add clarifier for total that it is based on the accumulated margin in 2018 and not on the gap in 2016, which was 112911. If that is the basis for assessment, it would not swing.
   # Highlight assumptions in table (Note: Highly simplified mehtodology based on Vox article)
