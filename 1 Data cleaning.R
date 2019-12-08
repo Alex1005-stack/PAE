@@ -25,10 +25,10 @@ Florida_correctional <- odbcDriverConnect("Driver={Microsoft Access Driver (*.md
   INMATE_ACTIVE_ROOT <- sqlQuery(Florida_correctional, paste ("select DCNumber, LastName, FirstName, MiddleName, NameSuffix, Sex, BirthDate, PrisonReleaseDate, ReceiptDate, race_descr from INMATE_ACTIVE_ROOT"))
   
   #2. Filter out inmates that:
-    # will not be released before the Florida general election on November 3rd
+    # will not be released before the Florida general election on November 3rd (Need to register by Oct. 5 2020)
   
   INMATE_ACTIVE_ROOT_2 <- INMATE_ACTIVE_ROOT %>%
-    filter(PrisonReleaseDate <= as.Date("2020-11-03"))
+    filter(PrisonReleaseDate <= as.Date("2020-10-05"))
   
   #3. List inmates that have committed murder or sexual offenses (disqualifying for right to vote) - selection based on offense categories (murder and sex crime) adjuste by hand to approximate literal amendment and bill, using reference:
       # Offense categories : http://www.dc.state.fl.us/offendersearch/offensecategory.aspx#KN
@@ -106,6 +106,8 @@ Florida_correctional <- odbcDriverConnect("Driver={Microsoft Access Driver (*.md
      
   write_rds(INMATE_ACTIVE_FULL, "clean-data/INMATE_ACTIVE_FULL.rds", compress = "none")
      
+  
+  
         
 
 #IV. Released inmates
@@ -133,7 +135,7 @@ Florida_correctional <- odbcDriverConnect("Driver={Microsoft Access Driver (*.md
        drop_na(BirthDate, PrisonReleaseDate)%>%
        mutate(BirthDate = as.Date(BirthDate),
               PrisonReleaseDate = as.Date(PrisonReleaseDate),
-              ElectionDate = as.Date("2020-11-03"),
+              ElectionDate = as.Date("2020-10-05"),
               age_at_release = age_calc(BirthDate, PrisonReleaseDate, units = "years", precise = FALSE),
               age_at_election = age_calc(BirthDate, ElectionDate, units = "years", precise = FALSE))
 
@@ -214,17 +216,17 @@ Florida_correctional <- odbcDriverConnect("Driver={Microsoft Access Driver (*.md
 #V. Supervised population
    #1. Currently supervised: Pull out data 
    
-   OFFENDER_OFFENSES_CCS <- sqlQuery(Florida_correctional, paste ("select DCNumber, adjudicationcharge_descr from OFFENDER_OFFENSES_CCS"))
+   OFFENDER_OFFENSES_CCS <- sqlQuery(Florida_correctional, paste ("select DCNumber, ProbationTerm, ParoleTerm, adjudicationcharge_descr from OFFENDER_OFFENSES_CCS"))
    
    OFFENDER_RESIDENCE <- sqlQuery(Florida_correctional, paste ("select DCNumber,AddressLine1, AddressLine2, City, State, ZipCode, Country from OFFENDER_RESIDENCE"))
    
    OFFENDER_ROOT <- sqlQuery(Florida_correctional, paste ("select DCNumber, LastName, FirstName, MiddleName, NameSuffix, Sex, BirthDate, SupervisionTerminationDate, supvstatus_description, race_descr from OFFENDER_ROOT"))
    
    #2. Filter out individuals on parole that:
-   # will not remain under supervision beyond the Florida general election on November 3rd
+   # will not remain under supervision beyond the Florida general election on November 3rd (registration has to happen by Oct 5th)
    
    OFFENDER_ROOT_2 <- OFFENDER_ROOT %>%
-     filter(SupervisionTerminationDate <= as.Date("2020-11-03"))
+     filter(SupervisionTerminationDate <= as.Date("2020-10-05"))
    
    #3. Filter out supervised that:
    # are likely dead
@@ -234,7 +236,7 @@ Florida_correctional <- odbcDriverConnect("Driver={Microsoft Access Driver (*.md
      drop_na(BirthDate, SupervisionTerminationDate)%>%
      mutate(BirthDate = as.Date(BirthDate),
             SupervisionTerminationDate = as.Date(SupervisionTerminationDate),
-            ElectionDate = as.Date("2020-11-03"),
+            ElectionDate = as.Date("2020-10-05"),
             age_at_release = age_calc(BirthDate, SupervisionTerminationDate, units = "years", precise = FALSE),
             age_at_election = age_calc(BirthDate, ElectionDate, units = "years", precise = FALSE))
    
@@ -291,3 +293,18 @@ Florida_correctional <- odbcDriverConnect("Driver={Microsoft Access Driver (*.md
    
    write_rds(OFFENDER_SUPERVISED_FULL, "clean-data/OFFENDER_SUPERVISED_FULL.rds", compress = "none")
    
+   
+   
+   # Write CSV's
+   write.csv(OFFENDER_SUPERVISED_FULL, "clean-data/OFFENDER_SUPERVISED_FULL.csv")
+   write.csv(INMATE_ACTIVE_FULL, "clean-data/INMATE_ACTIVE_FULL.csv")
+   write.csv(INMATE_RELEASE_FULL, "clean-data/INMATE_RELEASE_FULL.csv")
+   
+   
+   # Understanding parole or probation data
+    test <- OFFENDER_OFFENSES_CCS %>% group_by(DCNumber) %>%
+      summarize(Total_parole = sum(ParoleTerm),
+                Total_probation = sum(ProbationTerm))
+    
+    test %>% filter(Total_parole == 0) %>% nrow()
+    test %>% filter(Total_probation == 0) %>% nrow()
