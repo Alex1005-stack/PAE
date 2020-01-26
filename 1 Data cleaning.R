@@ -1,4 +1,3 @@
-
 library(eeptools)
 library(odbc)
 library(DBI)
@@ -6,7 +5,7 @@ library(dplyr)
 library(lubridate)
 library(readr)
 library(tidyverse)
-
+library(RODBC)
 
 #I. Create raw-data and clean-data directory to store the data that is to be downloaded      
 dir.create("raw-data")
@@ -14,6 +13,7 @@ dir.create("clean-data")
 
 #II. Load Florida data and store each database in an individual tab 
 Florida_correctional <- odbcDriverConnect("Driver={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=C:/Users/Alexander Klueber/Desktop/University/Coursework/PAE/Data analysis/PAE/raw-data/FDOC_October_2019.mdb")
+
 
 #III. Active inmates
   #1. Current inmates: Pull out data 
@@ -30,17 +30,29 @@ Florida_correctional <- odbcDriverConnect("Driver={Microsoft Access Driver (*.md
   INMATE_ACTIVE_ROOT_2 <- INMATE_ACTIVE_ROOT %>%
     filter(PrisonReleaseDate <= as.Date("2020-10-05"))
   
-  #3. List inmates that have committed murder or sexual offenses (disqualifying for right to vote) - selection based on offense categories (murder and sex crime) adjuste by hand to approximate literal amendment and bill, using reference:
-      # Offense categories : http://www.dc.state.fl.us/offendersearch/offensecategory.aspx#KN
-      #Source: 
+    #!!!!!  REVIEW metrics for exclusion from Amendment 4 BASED ON NEWEST FLORIDA SUPREME COURT DECISION:
+   # What exactly are the stipulations of SB 7066
+   # How to reflect these in the offense selection list
+   # Open question: how to include legal financial obligations
+  # Potentially: based on racial-county metrics in Expert testimony by Daniel A. Smith in Figure 2 on p. 37. and then just on racial grounds could look at how much people tend to own (That would then happen at the county after all these calculations to reduce the 1.5 million people) 
+  
+  
+  
+  #3. List inmates that have committed murder or sexual offenses (disqualifying for right to vote) - selection based on offense categories (murder and sex crime), adjusted by hand to approximate literal amendment and bill, using reference:
+      # Defining what qualifies as respective offenses: 
+        # Bill: SB 7066 - 98.0751 other than Legal Financial Obligations: http://laws.flrules.org/2019/162
         # Bill: https://www.tampabay.com/florida-politics/buzz/2019/05/26/how-felons-can-register-to-vote-in-florida-under-new-amendment-4-law/
+       #Bill: Legal Financial Oblications: court-ordered fees, fines and restitution: Don't know how to include yet (See Daniel A. Smith for estimates) -
         # Literal: https://www.pnj.com/story/news/2019/01/23/meaning-of-murder-key-in-florida-felons-voting-rights/2657973002/
+  
+      # Matching respective offenses from statues they violate to offense codes (AON/FCIC) and            then Correctional data: 
+         # Offense categories: http://www.dc.state.fl.us/offendersearch/offensecategory.aspx#KN
+         # FDLE's Statute Table: https://web.fdle.state.fl.us/statutes/about.jsf
+  
         
       #Note: 1. Literally included in the amendment: 
         # Murder: 1st degree murder (Excludes 2-3rd degree murder, other homicides, manslaugther, DUI manslaughter)
         # Sexual offenses: Rape, sexual offenses against children
-      #Note: 2. Included in the bill other than fines and restitutions 
-      #Note: 3. Fines and restitutions: Don't know how to include yet
     
       # Reading in selection of offenses:
     disq_offenses <- read.csv("raw-data/Disqualifying_offenses.csv")
@@ -301,6 +313,8 @@ Florida_correctional <- odbcDriverConnect("Driver={Microsoft Access Driver (*.md
    write.csv(INMATE_RELEASE_FULL, "clean-data/INMATE_RELEASE_FULL.csv")
    
    
+#Refining selections:
+   
    # Understanding parole or probation data
     test <- OFFENDER_OFFENSES_CCS %>% group_by(DCNumber) %>%
       summarize(Total_parole = sum(ParoleTerm),
@@ -308,3 +322,21 @@ Florida_correctional <- odbcDriverConnect("Driver={Microsoft Access Driver (*.md
     
     test %>% filter(Total_parole == 0) %>% nrow()
     test %>% filter(Total_probation == 0) %>% nrow()
+    
+    # Refining selection of offenses:
+      # Pull out unique offenses in correctional databases
+    INMATE_ACTIVE_CPS_OFFENSES <- unique(INMATE_ACTIVE_OFFENSES_CPS$adjudicationcharge_descr)
+    INMATE_ACTIVE_PRPR_OFFENSES <- unique(INMATE_ACTIVE_OFFENSES_PRPR$adjudicationcharge_descr)
+    INMATE_RELEASE_CPS_OFFENSES <- unique(INMATE_RELEASE_OFFENSES_CPS$adjudicationcharge_descr)
+    INMATE_RELEASE_PRPR_OFFENSES <- unique(INMATE_RELEASE_OFFENSES_PRPR$adjudicationcharge_descr)
+    OFFENDER_OFFENSES <- unique(OFFENDER_OFFENSES_CCS$adjudicationcharge_descr)
+    
+      # Note: Add people on parole, recently received
+    
+      # Combine unique offenses to one list
+    write.csv(INMATE_ACTIVE_CPS_OFFENSES, "raw-data/INMATE_ACTIVE_CPS_OFFENSES.csv")
+    write.csv(INMATE_ACTIVE_PRPR_OFFENSES, "raw-data/INMATE_ACTIVE_PRPR_OFFENSES.csv")
+    write.csv(INMATE_RELEASE_CPS_OFFENSES, "raw-data/INMATE_RELEASE_CPS_OFFENSES.csv")
+    write.csv(INMATE_RELEASE_PRPR_OFFENSES, "raw-data/INMATE_RELEASE_PRPR_OFFENSES.csv")
+    write.csv(OFFENDER_OFFENSES, "raw-data/OFFENDER_OFFENSES.csv")
+    

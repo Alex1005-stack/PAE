@@ -22,6 +22,11 @@ INMATE_ACTIVE_FULL <- read_rds("clean-data/INMATE_ACTIVE_FULL.rds")
 
 #2. Attach all data to a county and consolidate the 3 data sets
 
+
+#!!!!! REVIEW: Look at voter registration data and see where we can match to update ZIP code
+  # Matching logik:changing all text in both databases to lowercase, removing all punctuation, concatenating a string consisting of a person’s first name, last name, name suffix, date of birth, race code, and sex code, and then matching the concatenated strings across both datasets.
+
+
   # Read in zip codes
   Zip_codes <- read.csv("raw-data/Florida_zip_codes.csv")
   colnames(Zip_codes)[colnames(Zip_codes)=="ï..ZipCode"] <- "ZipCode"
@@ -46,6 +51,9 @@ INMATE_ACTIVE_FULL <- read_rds("clean-data/INMATE_ACTIVE_FULL.rds")
   # Unite data sets for which County is available and that are allowed to vote according to the amendment's literal interpretation
   NEW_VOTING_POPULATION <- rbind(INMATE_RELEASE_COUNTIES, INMATE_ACTIVE_COUNTIES, OFFENDER_SUPERVISED_COUNTIES) %>% filter(!is.na(County))
   
+  
+  
+  # !!!! Review: Conduct research and review turnout estimates from VOX
   
 #3. Expected partisan effect
   # VOX piece as basis for rough assumption: https://www.vox.com/the-big-idea/2018/11/2/18049510/felon-voting-rights-amendment-4-florida
@@ -84,6 +92,9 @@ INMATE_ACTIVE_FULL <- read_rds("clean-data/INMATE_ACTIVE_FULL.rds")
 #4. Scaling:
     # Assumption: 1,487,847 million people can now vote
     # https://www.sentencingproject.org/publications/6-million-lost-voters-state-level-estimates-felony-disenfranchisement-2016/
+    
+    
+# !!!!! REVIEW: Post-sentence estimates include individuals with felony convictions who are not eligible under SB7066 to gain their voting rights because of the type of felony conviction (murder or sexual offense).
   
   NEW_VOTING_POPULATION_COUNTIES_2 <- NEW_VOTING_POPULATION_COUNTIES %>% 
     select(County, Share_total_pot_vote, Share_estimated_D_vote, Share_estimated_R_vote, Share_estimated_O_vote) %>% 
