@@ -1,11 +1,16 @@
 library(eeptools)
+library(purrr)
 library(odbc)
 library(DBI)
 library(dplyr)
+library(plyr)
 library(lubridate)
 library(readr)
 library(tidyverse)
 library(RODBC)
+library(vroom)
+library(tm)
+
 
 #I. Create raw-data and clean-data directory to store the data that is to be downloaded      
 dir.create("raw-data")
@@ -30,29 +35,25 @@ Florida_correctional <- odbcDriverConnect("Driver={Microsoft Access Driver (*.md
   INMATE_ACTIVE_ROOT_2 <- INMATE_ACTIVE_ROOT %>%
     filter(PrisonReleaseDate <= as.Date("2020-10-05"))
   
-    #!!!!!  REVIEW metrics for exclusion from Amendment 4 BASED ON NEWEST FLORIDA SUPREME COURT DECISION:
-   # What exactly are the stipulations of SB 7066
-   # How to reflect these in the offense selection list
-   # Open question: how to include legal financial obligations
-  # Potentially: based on racial-county metrics in Expert testimony by Daniel A. Smith in Figure 2 on p. 37. and then just on racial grounds could look at how much people tend to own (That would then happen at the county after all these calculations to reduce the 1.5 million people) 
-  
-  
-  
   #3. List inmates that have committed murder or sexual offenses (disqualifying for right to vote) - selection based on offense categories (murder and sex crime), adjusted by hand to approximate literal amendment and bill, using reference:
-      # Defining what qualifies as respective offenses: 
-        # Bill: SB 7066 - 98.0751 other than Legal Financial Obligations: http://laws.flrules.org/2019/162
-        # Bill: https://www.tampabay.com/florida-politics/buzz/2019/05/26/how-felons-can-register-to-vote-in-florida-under-new-amendment-4-law/
-       #Bill: Legal Financial Oblications: court-ordered fees, fines and restitution: Don't know how to include yet (See Daniel A. Smith for estimates) -
-        # Literal: https://www.pnj.com/story/news/2019/01/23/meaning-of-murder-key-in-florida-felons-voting-rights/2657973002/
+      # Defining what qualifies as disqualifying offense offenses: 
+         
+         # Literal: https://www.pnj.com/story/news/2019/01/23/meaning-of-murder-key-in-florida-felons-voting-rights/2657973002/ 
+               # Murder: 1st degree murder (Excludes 2nd degree murder, other homicides, etc.)
+               # Sexual offenses: Rape, sexual offenses against children
+            
+         # Bill: https://www.tampabay.com/florida-politics/buzz/2019/05/26/how-felons-can-register-to-vote-in-florida-under-new-amendment-4-law/
+         # Bill: SB 7066 - 98.0751 other than Legal Financial Obligations: http://laws.flrules.org/2019/162     
   
-      # Matching respective offenses from statues they violate to offense codes (AON/FCIC) and            then Correctional data: 
-         # Offense categories: http://www.dc.state.fl.us/offendersearch/offensecategory.aspx#KN
-         # FDLE's Statute Table: https://web.fdle.state.fl.us/statutes/about.jsf
+  
+            # Note 1 - Bill: Legal Financial Obligations: court-ordered fees, fines and restitution:              no centralized database (See Mail by Daniel A. Smith). Include at county level based on               racial-county information metrics in Expert testimony by Daniel A. Smith in Figure 2 on p.             37. and then just on racial grounds could look at how much people tend to own (That would             then happen at the county after all these calculations to reduce the 1.5 million people)
+        
+  
+            # Note 2 - Bill and Literal: Matching respective offenses from statues they violate to                offense codes (AON/FCIC) and then Correctional data: 
+               # Offense categories: http://www.dc.state.fl.us/offendersearch/offensecategory.aspx#KN
+               # FDLE's Statute Table: https://web.fdle.state.fl.us/statutes/about.jsf
   
         
-      #Note: 1. Literally included in the amendment: 
-        # Murder: 1st degree murder (Excludes 2-3rd degree murder, other homicides, manslaugther, DUI manslaughter)
-        # Sexual offenses: Rape, sexual offenses against children
     
       # Reading in selection of offenses:
     disq_offenses <- read.csv("raw-data/Disqualifying_offenses.csv")
@@ -95,6 +96,9 @@ Florida_correctional <- odbcDriverConnect("Driver={Microsoft Access Driver (*.md
               Disq_literal = DCNumber %in% INMATE_ACTIVE_DISQ_literal$DCNumber) %>%
        filter(Disq_literal == FALSE)
   
+     INMATE_ACTIVE_FULL_bill <- INMATE_ACTIVE_FULL %>%
+        filter(Disq_bill == FALSE)
+     
   #5. As proxy for address, use county in which most felonies have been conducted (if an equal number of felonies have been conducted in multiple counties, we go by alphabetical order of counties)
      
      PRPR_CPS_COUNTIES <- rbind(INMATE_ACTIVE_OFFENSES_PRPR_2, INMATE_ACTIVE_OFFENSES_CPS_2)
@@ -160,18 +164,26 @@ Florida_correctional <- odbcDriverConnect("Driver={Microsoft Access Driver (*.md
                  ifelse(Life_expectancy_at_release >= age_at_election - age_at_release, "Yes", "No")) %>%
     filter(Presumed_alive == "Yes")
     
-    #3. List inmates that have committed murder or sexual offenses (disqualifying for right to vote) - selection based on offense categories (murder and sex crime) adjuste by hand to approximate literal amendment and bill, using reference:
-     # Offense categories : http://www.dc.state.fl.us/offendersearch/offensecategory.aspx#KN
-     #Source: 
-     # Bill: https://www.tampabay.com/florida-politics/buzz/2019/05/26/how-felons-can-register-to-vote-in-florida-under-new-amendment-4-law/
-     # Literal: https://www.pnj.com/story/news/2019/01/23/meaning-of-murder-key-in-florida-felons-voting-rights/2657973002/
-     
-     #Note: 1. Literally included in the amendment: 
-     # Murder: 1st degree murder (Excludes 2-3rd degree murder, other homicides, manslaugther, DUI manslaughter)
-     # Sexual offenses: Rape, sexual offenses against children
-     #Note: 2. Included in the bill other than fines and restitutions 
-     #Note: 3. Fines and restitutions: Don't know how to include yet
-     
+    
+    
+    #4. List inmates that have committed murder or sexual offenses (disqualifying for right to vote) - selection based on offense categories (murder and sex crime), adjusted by hand to approximate literal amendment and bill, using reference:
+    
+    # Defining what qualifies as disqualifying offense offenses: 
+    # Literal: https://www.pnj.com/story/news/2019/01/23/meaning-of-murder-key-in-florida-felons-voting-rights/2657973002/ 
+      # Murder: 1st degree murder (Excludes 2nd degree murder, other homicides, etc.)
+      # Sexual offenses: Rape, sexual offenses against children
+    
+    # Bill: https://www.tampabay.com/florida-politics/buzz/2019/05/26/how-felons-can-register-to-vote-in-florida-under-new-amendment-4-law/
+    # Bill: SB 7066 - 98.0751 other than Legal Financial Obligations: http://laws.flrules.org/2019/162     
+    
+    
+         # Note 1 - Bill: Legal Financial Obligations: court-ordered fees, fines and restitution:              no centralized                   database (See Mail by Daniel A. Smith). Include at county level based on               racial-county information metrics             in Expert testimony by Daniel A. Smith in Figure 2 on p.             37. and then just on racial grounds could look at              how much people tend to own (That would             then happen at the county after all these calculations to reduce the             1.5 million people)
+    
+         # Note 2 - Bill and Literal: Matching respective offenses from statues they violate to offense codes (AON/FCIC) and then Correctional data: 
+               # Offense categories: http://www.dc.state.fl.us/offendersearch/offensecategory.aspx#KN
+               # FDLE's Statute Table: https://web.fdle.state.fl.us/statutes/about.jsf
+
+    
      # Current prison offenses
      INMATE_RELEASE_OFFENSES_CPS_2 <- INMATE_RELEASE_OFFENSES_CPS %>%
        mutate(Disq_bill = adjudicationcharge_descr %in% disq_offenses$ï..Offense[which(disq_offenses$Bill == "Yes")],
@@ -190,8 +202,8 @@ Florida_correctional <- odbcDriverConnect("Driver={Microsoft Access Driver (*.md
      INMATE_RELEASE_OFFENSES_PRPR_2 <- INMATE_RELEASE_OFFENSES_PRPR %>%
        mutate(Disq_bill = adjudicationcharge_descr %in% disq_offenses$ï..Offense[which(disq_offenses$Bill == "Yes")],
               Disq_literal = adjudicationcharge_descr %in% disq_offenses$ï..Offense[which(disq_offenses$Literal == "Yes")])
-     view(INMATE_RELEASE_OFFENSES_PRPR_2)
-     INMATE_RELEASE_OFFENSES_PRPR_3_literal <- INMATE_RELEASE_OFFENSES_PRPR_2 %>%
+
+          INMATE_RELEASE_OFFENSES_PRPR_3_literal <- INMATE_RELEASE_OFFENSES_PRPR_2 %>%
        filter(Disq_literal == TRUE) %>%
        select(DCNumber)
      
@@ -201,6 +213,7 @@ Florida_correctional <- odbcDriverConnect("Driver={Microsoft Access Driver (*.md
      
      # Combine the two lists and filter for a list of distinct numbers
      INMATE_RELEASE_DISQ_literal <- rbind(INMATE_RELEASE_OFFENSES_CPS_3_literal, INMATE_RELEASE_OFFENSES_PRPR_3_literal) %>% distinct()
+     
      INMATE_RELEASE_DISQ_bill <- rbind(INMATE_RELEASE_OFFENSES_CPS_3_bill, INMATE_RELEASE_OFFENSES_PRPR_3_bill) %>% distinct()
      
      #4. Identify (and filter out) of the released inmates still presumed alive at the election to whom disqualifications apply:
@@ -210,12 +223,24 @@ Florida_correctional <- odbcDriverConnect("Driver={Microsoft Access Driver (*.md
               Disq_literal = DCNumber %in% INMATE_RELEASE_DISQ_literal$DCNumber) %>%
        filter(Disq_literal == FALSE)
 
+     INMATE_RELEASE_FULL_bill <- INMATE_RELEASE_ROOT_3 %>%
+        mutate(Disq_bill = DCNumber %in% INMATE_RELEASE_DISQ_bill$DCNumber,
+               Disq_literal = DCNumber %in% INMATE_RELEASE_DISQ_literal$DCNumber) %>%
+        filter(Disq_bill == FALSE)
+     
    #5. Add Addresses to INMATE_RELEASE_FULL and Filter out inmates that:
    # don't have residence in Florida
    INMATE_RELEASE_FULL <- INMATE_RELEASE_FULL %>%
      left_join(INMATE_RELEASE_RESIDENCE, by = c("DCNumber", "DCNumber"))  %>%
      filter(State == "FL") %>%
      select(DCNumber, LastName, FirstName, MiddleName, NameSuffix, Sex, BirthDate, race_descr, Disq_bill, Disq_literal, AddressLine1, AddressLine2, City, State, ZipCode)
+   
+   
+   # TO get total number: determine how many do not have Florida residence of all
+   
+  INMATE_RELEASE_Count <- INMATE_RELEASE_ROOT_3 %>%
+     left_join(INMATE_RELEASE_RESIDENCE, by = c("DCNumber", "DCNumber"))  %>%
+     filter(State == "FL")
    
 
    #6. Save data in clean files:
@@ -260,17 +285,23 @@ Florida_correctional <- odbcDriverConnect("Driver={Microsoft Access Driver (*.md
               ifelse(Life_expectancy_at_termination >= age_at_election - age_at_release, "Yes", "No")) %>%
      filter(Presumed_alive == "Yes")
    
-   #4. List supervised that have committed murder or sexual offenses (disqualifying for right to vote) - selection based on offense categories (murder and sex crime) adjuste by hand to approximate literal amendment and bill, using reference:
-   # Offense categories : http://www.dc.state.fl.us/offendersearch/offensecategory.aspx#KN
-   #Source: 
-   # Bill: https://www.tampabay.com/florida-politics/buzz/2019/05/26/how-felons-can-register-to-vote-in-florida-under-new-amendment-4-law/
-   # Literal: https://www.pnj.com/story/news/2019/01/23/meaning-of-murder-key-in-florida-felons-voting-rights/2657973002/
+   #4. List inmates that have committed murder or sexual offenses (disqualifying for right to vote) - selection based on offense categories (murder and sex crime), adjusted by hand to approximate literal amendment and bill, using reference:
    
-   #Note: 1. Literally included in the amendment: 
-   # Murder: 1st degree murder (Excludes 2-3rd degree murder, other homicides, manslaugther, DUI manslaughter)
+   # Defining what qualifies as disqualifying offense offenses: 
+   # Literal: https://www.pnj.com/story/news/2019/01/23/meaning-of-murder-key-in-florida-felons-voting-rights/2657973002/ 
+   # Murder: 1st degree murder (Excludes 2nd degree murder, other homicides, etc.)
    # Sexual offenses: Rape, sexual offenses against children
-   #Note: 2. Included in the bill other than fines and restitutions 
-   #Note: 3. Fines and restitutions: Don't know how to include yet
+   
+   # Bill: https://www.tampabay.com/florida-politics/buzz/2019/05/26/how-felons-can-register-to-vote-in-florida-under-new-amendment-4-law/
+   # Bill: SB 7066 - 98.0751 other than Legal Financial Obligations: http://laws.flrules.org/2019/162     
+   
+   
+   # Note 1 - Bill: Legal Financial Obligations: court-ordered fees, fines and restitution:              no centralized                   database (See Mail by Daniel A. Smith). Include at county level based on               racial-county information metrics             in Expert testimony by Daniel A. Smith in Figure 2 on p.             37. and then just on racial grounds could look at              how much people tend to own (That would             then happen at the county after all these calculations to reduce the             1.5 million people)
+   
+   # Note 2 - Bill and Literal: Matching respective offenses from statues they violate to offense codes (AON/FCIC) and then Correctional data: 
+   # Offense categories: http://www.dc.state.fl.us/offendersearch/offensecategory.aspx#KN
+   # FDLE's Statute Table: https://web.fdle.state.fl.us/statutes/about.jsf
+   
    
    # Prior prison offenses
    
@@ -293,6 +324,9 @@ Florida_correctional <- odbcDriverConnect("Driver={Microsoft Access Driver (*.md
             Disq_literal = DCNumber %in% OFFENDER_OFFENSES_CCS_3_literal$DCNumber) %>%
      filter(Disq_literal == FALSE)
    
+   OFFENDER_SUPERVISED_FULL_bill <- OFFENDER_SUPERVISED_FULL %>%
+      filter(Disq_bill == FALSE) 
+   
    #5. Add Addresses to OFFENDER_SUPERVISED_FULL and Filter out inmates that:
    # don't have residence in US and in Florida
    OFFENDER_SUPERVISED_FULL <- OFFENDER_SUPERVISED_FULL %>%
@@ -301,27 +335,110 @@ Florida_correctional <- odbcDriverConnect("Driver={Microsoft Access Driver (*.md
      filter(State == "FL") %>%
      select(DCNumber, LastName, FirstName, MiddleName, NameSuffix, Sex, BirthDate, race_descr, Disq_bill, Disq_literal, AddressLine1, AddressLine2, City, State, ZipCode)
    
+   
+   # TO get total number: determine how many do not have Florida residence of all
+   
+   OFFENDER_SUPERVISED_Count <- OFFENDER_ROOT_4 %>%
+     left_join(OFFENDER_RESIDENCE, by = c("DCNumber", "DCNumber"))  %>%
+     filter(State == "FL")
+   
+   
    #6. Save data in clean files:
    
    write_rds(OFFENDER_SUPERVISED_FULL, "clean-data/OFFENDER_SUPERVISED_FULL.rds", compress = "none")
    
    
+#V. Parolees
    
-   # Write CSV's
-   write.csv(OFFENDER_SUPERVISED_FULL, "clean-data/OFFENDER_SUPERVISED_FULL.csv")
-   write.csv(INMATE_ACTIVE_FULL, "clean-data/INMATE_ACTIVE_FULL.csv")
-   write.csv(INMATE_RELEASE_FULL, "clean-data/INMATE_RELEASE_FULL.csv")
+   paroles <- read.csv("raw-data/PRR_Parole.csv")
    
+  
    
-#Refining selections:
+#VI. Load and prepare voter registration data 
+   
+   # 1. Read in text files
+      # Get names of all the text files
+   list_of_files <- list.files(path = "raw-data/Voter_Registration_20191210", recursive = TRUE,
+                               pattern = "\\.txt$", 
+                               full.names = TRUE)
+   
+   datalist = lapply(list_of_files, function(x)read.table(x, header=FALSE, sep="\t", fill = TRUE, quote="\"", stringsAsFactors = FALSE)) 
+  
+
+   # 2. Combine registration data to a data table
+   
+  registration_data <- do.call("rbind.fill", datalist)
+   
+  glimpse(registration_data)
+  
+  
+  # 3. Rename column headers 
+  
+  colnames(registration_data)<- c("County Code", "Voter ID", "Name Last", "Name Suffix", "Name First", "Name Middle", "Requested public records exemption", "Residence Address Line 1", "Residence Address Line 2", "Residence City (USPS)", "Residence State", "Residence Zipcode", "Mailing Address Line 1", "Mailing Address Line 2", "Mailing Address Line 3", "Mailing City", "Mailing State", "Mailing Zipcode", "Mailing Country", "Gender", "Race", "Birth Date", "Registration Date", "Party Affiliation", "Precinct", "Precinct Group", "Precinct Split", "Precinct Suffix", "Voter Status", "Congressional District", "House District", "Senate District", "County Commission District", "School Board District", "Daytime Area Code", "Daytime Phone Number", "Daytime Phone Extension", "Email address")
+  
+ 
+ # 4. Reduce data set to columns relevant for this analysis
+  
+  registration_data_red <- registration_data %>%
+                              select(`County Code`, `Voter ID`, `Name Last`, `Name First`, `Residence Address Line 1`, `Residence Address Line 2`, `Residence State`, `Residence Zipcode`, Gender, Race, `Birth Date`, `Registration Date`, `Party Affiliation`)
+  
+  glimpse(registration_data_red)
+  
+  # 5. Matching: changing all text in both databases to lowercase, removing all punctuation, concatenating a string consisting of a person’s first name, last name, name suffix, date of birth, race code, and sex code, and then matching the concatenated strings across both datasets.
+  
+
+   # 5.a Removing all punctuation
+
+          registration_data_red$`Name Last` <- removePunctuation(registration_data_red$`Name Last`)
+          
+          registration_data_red$`Name First` <- removePunctuation(registration_data_red$`Name First`)
+          
+          registration_data_red$Gender <- removePunctuation(registration_data_red$Gender)
+          
+          registration_data_red$`Birth Date` <- removePunctuation(registration_data_red$`Birth Date`)
+    
+          
+  
+  # 5.b Concatennating it all to one string
+  
+  registration_data_red <- registration_data_red %>% 
+                                    mutate(string = paste(`Name Last`, `Name First`, Gender, Race, `Birth Date`, sep=""))
+  
+  # 5.c Make string lower case
+
+  registration_data_red$string <- tolower(registration_data_red$string)
+  
+  glimpse(registration_data_red)
+  
+  #6. Save data in clean files:
+  
+  write_rds(registration_data_red, "clean-data/registration_data_red.rds", compress = "none")
+  
+
+#X. OTHER: Refining selections:
    
    # Understanding parole or probation data
     test <- OFFENDER_OFFENSES_CCS %>% group_by(DCNumber) %>%
       summarize(Total_parole = sum(ParoleTerm),
                 Total_probation = sum(ProbationTerm))
     
+    
     test %>% filter(Total_parole == 0) %>% nrow()
     test %>% filter(Total_probation == 0) %>% nrow()
+    
+    
+    # Test value of new parole data 
+    test_2 <- test %>% filter(Total_parole == 0) %>% select (DCNumber)
+    
+    test_3 <- paroles %>%
+       mutate(Overlap = DORNUM %in% test_2$DCNumber) %>% 
+       filter(Overlap == TRUE)
+    
+    View(test_3)
+    
+  
+      # Combine distinct values to one list 
+    
     
     # Refining selection of offenses:
       # Pull out unique offenses in correctional databases
