@@ -17,7 +17,7 @@ dir.create("raw-data")
 dir.create("clean-data")
 
 #II. Load Florida data and store each database in an individual tab 
-Florida_correctional <- odbcDriverConnect("Driver={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=C:/Users/Alexander Klueber/Desktop/University/Coursework/PAE/Data analysis/PAE/raw-data/FDOC_October_2019.mdb")
+Florida_correctional <- odbcDriverConnect("Driver={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=C:/Users/Alexander Klueber/Desktop/University/Coursework/PAE/Data analysis/PAE/raw-data/FDOC_Jan_2020.mdb")
 
 
 #III. Active inmates
@@ -28,6 +28,7 @@ Florida_correctional <- odbcDriverConnect("Driver={Microsoft Access Driver (*.md
   INMATE_ACTIVE_OFFENSES_PRPR <- sqlQuery(Florida_correctional, paste ("select DCNumber, Sequence, County, adjudicationcharge_descr from INMATE_ACTIVE_OFFENSES_PRPR"))
   
   INMATE_ACTIVE_ROOT <- sqlQuery(Florida_correctional, paste ("select DCNumber, LastName, FirstName, MiddleName, NameSuffix, Sex, BirthDate, PrisonReleaseDate, ReceiptDate, race_descr from INMATE_ACTIVE_ROOT"))
+
   
   #2. Filter out inmates that:
     # will not be released before the Florida general election on November 3rd (Need to register by Oct. 5 2020)
@@ -107,7 +108,7 @@ Florida_correctional <- odbcDriverConnect("Driver={Microsoft Access Driver (*.md
        filter(DCNumber %in% INMATE_ACTIVE_FULL$DCNumber)%>%
        unite("DCNumber_county", c(DCNumber, County), sep =" / ") %>%
        group_by(DCNumber_county)%>%
-       summarize(Frequ = n())   %>%
+       dplyr:: summarize(Frequ = dplyr:: n())   %>%
        separate(DCNumber_county, c("DCNumber", "County"), sep = " / ") %>%
        arrange(desc(Frequ)) 
        
@@ -145,8 +146,8 @@ Florida_correctional <- odbcDriverConnect("Driver={Microsoft Access Driver (*.md
      
      # reading in life expectancy
      Life_expectancy <- read.csv("raw-data/Life_expectancy.csv") 
-     colnames(Life_expectancy)[colnames(Life_expectancy)=="ï..age"] <- "age_at_release"
      
+     colnames(Life_expectancy)[colnames(Life_expectancy)=="ï..Age"] <- "age_at_release"
      INMATE_RELEASE_ROOT_2 <- INMATE_RELEASE_ROOT %>% 
        drop_na(BirthDate, PrisonReleaseDate)%>%
        mutate(BirthDate = as.Date(BirthDate),
@@ -242,6 +243,12 @@ Florida_correctional <- odbcDriverConnect("Driver={Microsoft Access Driver (*.md
      left_join(INMATE_RELEASE_RESIDENCE, by = c("DCNumber", "DCNumber"))  %>%
      filter(State == "FL")
    
+  INMATE_RELEASE_Count_lit <- INMATE_RELEASE_FULL %>%
+        filter(State == "FL")
+  
+  INMATE_RELEASE_Count_bill <- INMATE_RELEASE_FULL_bill %>%
+    left_join(INMATE_RELEASE_RESIDENCE, by = c("DCNumber", "DCNumber"))  %>%
+    filter(State == "FL")
 
    #6. Save data in clean files:
    
@@ -324,9 +331,6 @@ Florida_correctional <- odbcDriverConnect("Driver={Microsoft Access Driver (*.md
             Disq_literal = DCNumber %in% OFFENDER_OFFENSES_CCS_3_literal$DCNumber) %>%
      filter(Disq_literal == FALSE)
    
-   OFFENDER_SUPERVISED_FULL_bill <- OFFENDER_SUPERVISED_FULL %>%
-      filter(Disq_bill == FALSE) 
-   
    #5. Add Addresses to OFFENDER_SUPERVISED_FULL and Filter out inmates that:
    # don't have residence in US and in Florida
    OFFENDER_SUPERVISED_FULL <- OFFENDER_SUPERVISED_FULL %>%
@@ -334,7 +338,9 @@ Florida_correctional <- odbcDriverConnect("Driver={Microsoft Access Driver (*.md
      filter(!supvstatus_description %in% c("ABSCONDER/FUGITIVE", "DEPORTED", "MOVED TO OTHER STATE")) %>%
      filter(State == "FL") %>%
      select(DCNumber, LastName, FirstName, MiddleName, NameSuffix, Sex, BirthDate, race_descr, Disq_bill, Disq_literal, AddressLine1, AddressLine2, City, State, ZipCode)
-   
+  
+   OFFENDER_SUPERVISED_FULL_bill <- OFFENDER_SUPERVISED_FULL %>%
+     filter(Disq_bill == FALSE) 
    
    # TO get total number: determine how many do not have Florida residence of all
    
@@ -342,19 +348,21 @@ Florida_correctional <- odbcDriverConnect("Driver={Microsoft Access Driver (*.md
      left_join(OFFENDER_RESIDENCE, by = c("DCNumber", "DCNumber"))  %>%
      filter(State == "FL")
    
+   OFFENDER_SUPERVISED_Count_lit <- OFFENDER_SUPERVISED_FULL %>%
+     filter(State == "FL")
    
+   OFFENDER_SUPERVISED_Count_bill <- OFFENDER_SUPERVISED_FULL_bill %>%
+     filter(State == "FL")
+   
+
    #6. Save data in clean files:
    
    write_rds(OFFENDER_SUPERVISED_FULL, "clean-data/OFFENDER_SUPERVISED_FULL.rds", compress = "none")
    
    
-#V. Parolees
-   
-   paroles <- read.csv("raw-data/PRR_Parole.csv")
-   
-  
-   
 #VI. Load and prepare voter registration data 
+   
+   #!!!! Once voter registration update is available, change here
    
    # 1. Read in text files
       # Get names of all the text files
@@ -368,9 +376,7 @@ Florida_correctional <- odbcDriverConnect("Driver={Microsoft Access Driver (*.md
    # 2. Combine registration data to a data table
    
   registration_data <- do.call("rbind.fill", datalist)
-   
-  glimpse(registration_data)
-  
+
   
   # 3. Rename column headers 
   
@@ -382,23 +388,20 @@ Florida_correctional <- odbcDriverConnect("Driver={Microsoft Access Driver (*.md
   registration_data_red <- registration_data %>%
                               select(`County Code`, `Voter ID`, `Name Last`, `Name First`, `Residence Address Line 1`, `Residence Address Line 2`, `Residence State`, `Residence Zipcode`, Gender, Race, `Birth Date`, `Registration Date`, `Party Affiliation`)
   
-  glimpse(registration_data_red)
-  
+
   # 5. Matching: changing all text in both databases to lowercase, removing all punctuation, concatenating a string consisting of a person’s first name, last name, name suffix, date of birth, race code, and sex code, and then matching the concatenated strings across both datasets.
-  
 
    # 5.a Removing all punctuation
 
-          registration_data_red$`Name Last` <- removePunctuation(registration_data_red$`Name Last`)
+          registration_data_red$`Name Last` <- removePunctuation(as.character(registration_data_red$`Name Last`))
           
-          registration_data_red$`Name First` <- removePunctuation(registration_data_red$`Name First`)
+          registration_data_red$`Name First` <- removePunctuation(as.character(registration_data_red$`Name First`))
           
-          registration_data_red$Gender <- removePunctuation(registration_data_red$Gender)
+          registration_data_red$Gender <- removePunctuation(as.character(registration_data_red$Gender))
           
-          registration_data_red$`Birth Date` <- removePunctuation(registration_data_red$`Birth Date`)
+          registration_data_red$`Birth Date` <- removePunctuation(as.character(registration_data_red$`Birth Date`))
     
           
-  
   # 5.b Concatennating it all to one string
   
   registration_data_red <- registration_data_red %>% 
@@ -408,38 +411,14 @@ Florida_correctional <- odbcDriverConnect("Driver={Microsoft Access Driver (*.md
 
   registration_data_red$string <- tolower(registration_data_red$string)
   
-  glimpse(registration_data_red)
-  
+
   #6. Save data in clean files:
   
   write_rds(registration_data_red, "clean-data/registration_data_red.rds", compress = "none")
   
 
 #X. OTHER: Refining selections:
-   
-   # Understanding parole or probation data
-    test <- OFFENDER_OFFENSES_CCS %>% group_by(DCNumber) %>%
-      summarize(Total_parole = sum(ParoleTerm),
-                Total_probation = sum(ProbationTerm))
-    
-    
-    test %>% filter(Total_parole == 0) %>% nrow()
-    test %>% filter(Total_probation == 0) %>% nrow()
-    
-    
-    # Test value of new parole data 
-    test_2 <- test %>% filter(Total_parole == 0) %>% select (DCNumber)
-    
-    test_3 <- paroles %>%
-       mutate(Overlap = DORNUM %in% test_2$DCNumber) %>% 
-       filter(Overlap == TRUE)
-    
-    View(test_3)
-    
-  
-      # Combine distinct values to one list 
-    
-    
+
     # Refining selection of offenses:
       # Pull out unique offenses in correctional databases
     INMATE_ACTIVE_CPS_OFFENSES <- unique(INMATE_ACTIVE_OFFENSES_CPS$adjudicationcharge_descr)
@@ -447,8 +426,6 @@ Florida_correctional <- odbcDriverConnect("Driver={Microsoft Access Driver (*.md
     INMATE_RELEASE_CPS_OFFENSES <- unique(INMATE_RELEASE_OFFENSES_CPS$adjudicationcharge_descr)
     INMATE_RELEASE_PRPR_OFFENSES <- unique(INMATE_RELEASE_OFFENSES_PRPR$adjudicationcharge_descr)
     OFFENDER_OFFENSES <- unique(OFFENDER_OFFENSES_CCS$adjudicationcharge_descr)
-    
-      # Note: Add people on parole, recently received
     
       # Combine unique offenses to one list
     write.csv(INMATE_ACTIVE_CPS_OFFENSES, "raw-data/INMATE_ACTIVE_CPS_OFFENSES.csv")
