@@ -362,11 +362,9 @@ Florida_correctional <- odbcDriverConnect("Driver={Microsoft Access Driver (*.md
    
 #VI. Load and prepare voter registration data 
    
-   #!!!! Once voter registration update is available, change here
-   
    # 1. Read in text files
       # Get names of all the text files
-   list_of_files <- list.files(path = "raw-data/Voter_Registration_20191210", recursive = TRUE,
+   list_of_files <- list.files(path = "raw-data/Voter_Registration_20200303", recursive = TRUE,
                                pattern = "\\.txt$", 
                                full.names = TRUE)
    
