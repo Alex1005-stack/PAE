@@ -185,9 +185,7 @@ Registration_data_mtach <- read_rds("clean-data/registration_data_red.rds")
   
   # Turn registration date into an actual date of Months and years
 
-  NEW_VOTING_POPULATION_full_registered$`Registration Date` <- 
-  
-  NEW_VOTING_POPULATION_full_registered_1 <- NEW_VOTING_POPULATION_full_registered %>%
+   NEW_VOTING_POPULATION_full_registered_1 <- NEW_VOTING_POPULATION_full_registered %>%
     mutate(Reg_date = as.Date(`Registration Date`, "%m/%d/%Y")) %>%
     filter(Reg_date >= "2018-10-01")
   
@@ -283,6 +281,8 @@ Registration_data_mtach <- read_rds("clean-data/registration_data_red.rds")
      dplyr:: summarise(Total = dplyr:: n()) %>% 
      mutate(Share = Total/ sum(Total))
   
+   Racial_split_reg$race_descr <- Racial_split_reg$race_descr %>% tolower() %>% capitalize()
+   
    Racial_split <- Racial_split_tot %>%
      left_join(Racial_split_reg, by = c("race_descr","race_descr"))
    
@@ -291,7 +291,6 @@ Registration_data_mtach <- read_rds("clean-data/registration_data_red.rds")
       # Formate columns
    
    names(Racial_split) <- c("Race", "Absolute_All", "Share_All", "Absolute_Reg", "Share_Reg")
-   Racial_split$Race <- Racial_split$Race %>% tolower() %>% capitalize()
    
    Racial_split_1 <- Racial_split %>% 
      arrange(desc(Share_All)) %>%
@@ -403,7 +402,6 @@ Registration_data_mtach <- read_rds("clean-data/registration_data_red.rds")
     mutate(Race_new = ifelse(race_descr == "Black", "Black", "White & others"), Join = paste(County_new, Race_new, sep = "")) %>%
     left_join(LFOs, by = c("Join","Join")) %>%
     mutate(Total_exp_pot_vote = Total_individuals * Total.share.of.eligible.voters)
-  
 
 #8. Turnout shares for scaling: 
   
@@ -454,7 +452,9 @@ Registration_data_mtach <- read_rds("clean-data/registration_data_red.rds")
   Non_sample_bill_LFO_free <- round(Non_sample_bill * .2793, 0) # Based on Excel: Legal Financial Obligations_ non-sample
 
   
-  total_pop_eligible <-   389725 # Based on Barrier / Scaling table
+  total_pop_eligible <-    362614 # Based on Barrier / Scaling table
+  total_pop_lit_theoret <- Non_sample_lit + sample_pop_qualified_lit
+  
   
   # Basis for share
   n_medium <- round(sum(NEW_VOTING_POPULATION_COUNTIES_v1$Total_exp_pot_vote),0)
@@ -486,8 +486,11 @@ Registration_data_mtach <- read_rds("clean-data/registration_data_red.rds")
   NEW_VOTING_POPULATION_COUNTIES_all <- NEW_VOTING_POPULATION_COUNTIES_v1 %>% 
     dplyr:: group_by(County_new) %>% 
     dplyr:: summarise(Total_sample_pot_vote_county = round(sum(Total_exp_pot_vote),0)) %>% # 1. Determine expected number
-    mutate(Share_pot_county = Total_sample_pot_vote_county / total_sample_pop_eligible, # 2. Determine share of county for expected number
-           Pred_pot_county_scaled = round(Share_pot_county*total_pop_eligible,0),
+    mutate(Share_pot_county = Total_sample_pot_vote_county / total_sample_pop_eligible, # 2. Determine share of county for expected number  
+           Pred_pot_county_scaled = round(Share_pot_county*total_pop_lit_theoret,0),  
+           
+           #!!!!!!! Varry between total_pop_eligible and total_pop_lit_theoret
+           
            # 3. Scale county number based on share and total_pop_eligible
            Pred_pot_county_scaled_incl_spill = round(Pred_pot_county_scaled + Pred_pot_county_scaled *spill,0))
             # 4. Add spillover
@@ -527,13 +530,16 @@ Registration_data_mtach <- read_rds("clean-data/registration_data_red.rds")
      Share_medium_reg_R_county = Pred_sample_medium_reg_R_vote_county / total_sample_pop_eligible,
      Share_medium_reg_O_county = Pred_sample_medium_reg_O_vote_county / total_sample_pop_eligible,
    # 4. Scale county number based on share and total_pop_eligible        
-  Pred_medium_county_scaled = round(Share_medium_county*total_pop_eligible,0),
-  Pred_medium_vox_D_county_scaled = round(Share_medium_vox_D_county*total_pop_eligible,0),
-  Pred_medium_vox_R_county_scaled = round(Share_medium_vox_R_county*total_pop_eligible,0),
-  Pred_medium_vox_O_county_scaled = round(Share_medium_vox_O_county*total_pop_eligible,0),
-  Pred_medium_reg_D_county_scaled = round(Share_medium_reg_D_county*total_pop_eligible,0),
-  Pred_medium_reg_R_county_scaled = round(Share_medium_reg_R_county*total_pop_eligible,0),
-  Pred_medium_reg_O_county_scaled = round(Share_medium_reg_O_county*total_pop_eligible,0),
+  Pred_medium_county_scaled = round(Share_medium_county*total_pop_lit_theoret,0),
+  Pred_medium_vox_D_county_scaled = round(Share_medium_vox_D_county*total_pop_lit_theoret,0),
+  Pred_medium_vox_R_county_scaled = round(Share_medium_vox_R_county*total_pop_lit_theoret,0),
+  Pred_medium_vox_O_county_scaled = round(Share_medium_vox_O_county*total_pop_lit_theoret,0),
+  Pred_medium_reg_D_county_scaled = round(Share_medium_reg_D_county*total_pop_lit_theoret,0),
+  Pred_medium_reg_R_county_scaled = round(Share_medium_reg_R_county*total_pop_lit_theoret,0),
+  Pred_medium_reg_O_county_scaled = round(Share_medium_reg_O_county*total_pop_lit_theoret,0),
+  
+  #!!!!!!! Varry between total_pop_eligible and total_pop_lit_theoret
+  
    # 5. Add spillover         
   Pred_medium_county_scaled_incl_spill = round(Pred_medium_county_scaled + Pred_medium_county_scaled *spill,0),
   Pred_medium_county_vox_D_scaled_incl_spill = round(Pred_medium_vox_D_county_scaled + Pred_medium_vox_D_county_scaled *spill,0),
@@ -543,9 +549,6 @@ Registration_data_mtach <- read_rds("clean-data/registration_data_red.rds")
   Pred_medium_county_reg_R_scaled_incl_spill = round(Pred_medium_reg_R_county_scaled + Pred_medium_reg_R_county_scaled *spill,0),
   Pred_medium_county_reg_O_scaled_incl_spill = round(Pred_medium_reg_O_county_scaled + Pred_medium_reg_O_county_scaled *spill,0)
   )
- 
- 
-
  
  
  # C. Low scenario w/ party affiliation
@@ -581,13 +584,16 @@ Registration_data_mtach <- read_rds("clean-data/registration_data_red.rds")
      Share_low_reg_R_county = Pred_sample_low_reg_R_vote_county / total_sample_pop_eligible,
      Share_low_reg_O_county = Pred_sample_low_reg_O_vote_county / total_sample_pop_eligible,
      # 4. Scale county number based on share and total_pop_eligible        
-     Pred_low_county_scaled = round(Share_low_county*total_pop_eligible,0),
-     Pred_low_vox_D_county_scaled = round(Share_low_vox_D_county*total_pop_eligible,0),
-     Pred_low_vox_R_county_scaled = round(Share_low_vox_R_county*total_pop_eligible,0),
-     Pred_low_vox_O_county_scaled = round(Share_low_vox_O_county*total_pop_eligible,0),
-     Pred_low_reg_D_county_scaled = round(Share_low_reg_D_county*total_pop_eligible,0),
-     Pred_low_reg_R_county_scaled = round(Share_low_reg_R_county*total_pop_eligible,0),
-     Pred_low_reg_O_county_scaled = round(Share_low_reg_O_county*total_pop_eligible,0),
+     Pred_low_county_scaled = round(Share_low_county*total_pop_lit_theoret,0),
+     Pred_low_vox_D_county_scaled = round(Share_low_vox_D_county*total_pop_lit_theoret,0),
+     Pred_low_vox_R_county_scaled = round(Share_low_vox_R_county*total_pop_lit_theoret,0),
+     Pred_low_vox_O_county_scaled = round(Share_low_vox_O_county*total_pop_lit_theoret,0),
+     Pred_low_reg_D_county_scaled = round(Share_low_reg_D_county*total_pop_lit_theoret,0),
+     Pred_low_reg_R_county_scaled = round(Share_low_reg_R_county*total_pop_lit_theoret,0),
+     Pred_low_reg_O_county_scaled = round(Share_low_reg_O_county*total_pop_lit_theoret,0),
+     
+     #!!!!!!! Varry between total_pop_eligible and total_pop_lit_theoret
+     
      # 5. Add spillover         
      Pred_low_county_scaled_incl_spill = round(Pred_low_county_scaled + Pred_low_county_scaled *spill,0),
      Pred_low_county_vox_D_scaled_incl_spill = round(Pred_low_vox_D_county_scaled + Pred_low_vox_D_county_scaled *spill,0),
@@ -632,13 +638,16 @@ Registration_data_mtach <- read_rds("clean-data/registration_data_red.rds")
      Share_high_reg_R_county = Pred_sample_high_reg_R_vote_county / total_sample_pop_eligible,
      Share_high_reg_O_county = Pred_sample_high_reg_O_vote_county / total_sample_pop_eligible,
      # 4. Scale county number based on share and total_pop_eligible        
-     Pred_high_county_scaled = round(Share_high_county*total_pop_eligible,0),
-     Pred_high_vox_D_county_scaled = round(Share_high_vox_D_county*total_pop_eligible,0),
-     Pred_high_vox_R_county_scaled = round(Share_high_vox_R_county*total_pop_eligible,0),
-     Pred_high_vox_O_county_scaled = round(Share_high_vox_O_county*total_pop_eligible,0),
-     Pred_high_reg_D_county_scaled = round(Share_high_reg_D_county*total_pop_eligible,0),
-     Pred_high_reg_R_county_scaled = round(Share_high_reg_R_county*total_pop_eligible,0),
-     Pred_high_reg_O_county_scaled = round(Share_high_reg_O_county*total_pop_eligible,0),
+     Pred_high_county_scaled = round(Share_high_county*total_pop_lit_theoret,0),
+     Pred_high_vox_D_county_scaled = round(Share_high_vox_D_county*total_pop_lit_theoret,0),
+     Pred_high_vox_R_county_scaled = round(Share_high_vox_R_county*total_pop_lit_theoret,0),
+     Pred_high_vox_O_county_scaled = round(Share_high_vox_O_county*total_pop_lit_theoret,0),
+     Pred_high_reg_D_county_scaled = round(Share_high_reg_D_county*total_pop_lit_theoret,0),
+     Pred_high_reg_R_county_scaled = round(Share_high_reg_R_county*total_pop_lit_theoret,0),
+     Pred_high_reg_O_county_scaled = round(Share_high_reg_O_county*total_pop_lit_theoret,0),
+     
+     #!!!!!!! Varry between total_pop_eligible and total_pop_lit_theoret
+     
      # 5. Add spillover         
      Pred_high_county_scaled_incl_spill = round(Pred_high_county_scaled + Pred_high_county_scaled *spill,0),
      Pred_high_county_vox_D_scaled_incl_spill = round(Pred_high_vox_D_county_scaled + Pred_high_vox_D_county_scaled *spill,0),
@@ -666,7 +675,7 @@ Registration_data_mtach <- read_rds("clean-data/registration_data_red.rds")
    ) %>%
    cols_label(
      County_new = "County",
-     Total_exp_pot_vote_county = "Enfranchised in sample",
+     Total_sample_pot_vote_county = "Enfranchised in sample",
      Share_pot_county = "Share of sample",
      Pred_pot_county_scaled ="Enfranchised in population",
      Pred_pot_county_scaled_incl_spill ="Enfranchised & spillover in population"
@@ -749,9 +758,10 @@ table_high <-
   
   Elections_2016 <- read.csv("raw-data/Past-elections/Results_presidential_elections_16.csv")
 
-  Elections_2016_2 <- Elections_2016 %>% group_by(PartyCode, county) %>%
-    summarise(Votes = sum(candidatevotes))
-  
+  Elections_2016_2 <- Elections_2016 %>% 
+    dplyr:: group_by(PartyCode, county) %>%
+    dplyr:: summarise(Votes = sum(candidatevotes))
+    
   Elections_2016_3 <- Elections_2016_2 %>%
     spread(key = PartyCode, value=Votes)
   
@@ -849,8 +859,8 @@ table_high <-
   
   
   Elections_2020_medium_map <- Elections_2020_medium %>% 
-    select(County, `2016 margin`, `Add. margin 1`, `Advantage 1`) %>%
-    mutate(`Expected impact` = `Add. margin 1`/ `2016 margin`)
+    select(County, `2016 margin of victory`, `Expected add. margin 1`, `Expected marginal advantage 1`) %>%
+    mutate(`Expected impact` = `Expected add. margin 1`/ `2016 margin of victory`)
   
   write.csv(Elections_2020_medium_map, file = "Elections_2020_medium_map.csv")
 
@@ -928,6 +938,8 @@ filter(`Potential of Amendment 4 (direct) to swing the vote` == "Yes" | `Potenti
   Elections_2020_low_table <- Elections_2020_low %>%
     select(County, `Incumbent party`, `2016 margin of victory`, `Enfranchised voters`, `Enfranchised voters & spillover`, `Expected add. margin 1`, `Expected marginal advantage 1`, `Amendment 4 expected to swing vote 1`, `Expected add. margin 2`, `Expected marginal advantage 2`, `Amendment 4 expected to swing vote 2`)
   
+  view(Elections_2020_low_table)
+  
   table_low_1 <- Elections_2020_low_table %>%
     filter(`Amendment 4 expected to swing vote 1` == "Yes" | `Amendment 4 expected to swing vote 2` == "Yes") %>%
     gt()%>%
@@ -966,10 +978,10 @@ filter(`Potential of Amendment 4 (direct) to swing the vote` == "Yes" | `Potenti
     select(County, `Incumbent party`, `2016 margin of victory`, `Enfranchised voters`, `Enfranchised voters & spillover`, `Expected add. margin 1`, `Expected marginal advantage 1`, `Amendment 4 expected to swing vote 1`, `Expected add. margin 2`, `Expected marginal advantage 2`, `Amendment 4 expected to swing vote 2`)
   
   table_medium_1 <- Elections_2020_medium_table %>%
-    # filter(`Amendment 4 expected to swing vote 1` == "Yes" | `Amendment 4 expected to swing vote 2` == "Yes") %>%
+     filter(`Amendment 4 expected to swing vote 1` == "Yes" | `Amendment 4 expected to swing vote 2` == "Yes") %>%
     gt()%>%
     tab_header(
-      title = "The electoral significance of Amendment 4 in 2020") %>%
+      title = "The electoral significance of SB 7066 in 2020") %>%
     tab_spanner(
       label = "2016 results",
       columns = vars("Incumbent party", "2016 margin of victory")) %>%
@@ -1001,9 +1013,9 @@ filter(`Potential of Amendment 4 (direct) to swing the vote` == "Yes" | `Potenti
   Elections_2020_high_table <- Elections_2020_high %>%
     select(County, `Incumbent party`, `2016 margin of victory`, `Enfranchised voters`, `Enfranchised voters & spillover`, `Expected add. margin 1`, `Expected marginal advantage 1`, `Amendment 4 expected to swing vote 1`, `Expected add. margin 2`, `Expected marginal advantage 2`, `Amendment 4 expected to swing vote 2`)
   
-  
+  view(Elections_2020_high_table)
   table_high_1 <- Elections_2020_high_table %>%
-    # filter(`Amendment 4 expected to swing vote 1` == "Yes" | `Amendment 4 expected to swing vote 2` == "Yes") %>%
+    #filter(`Amendment 4 expected to swing vote 1` == "Yes" | `Amendment 4 expected to swing vote 2` == "Yes") %>%
     gt()%>%
     tab_header(
       title = "The electoral significance of Amendment 4 in 2020") %>%
@@ -1029,56 +1041,3 @@ filter(`Potential of Amendment 4 (direct) to swing the vote` == "Yes" | `Potenti
     cols_align(
       align = "center"
     )
-  
-   
-  
-  # OLD CODE:
-  
-  
-  # 
-  #   tab_style(
-  #     style = list(
-  #       cell_fill(color = "#FFA500"),
-  #       cell_text(weight = "bold")
-  #     ),
-  #     locations = cells_data(
-  #       columns = vars(County, `Incumbent party`, `2016 margin of victory`, `Enfranchised voters`, `Potential of Amendment 4 (direct) to swing the vote`, `Potential of Amendment 4 (direct & spillover) to swing the vote`),
-  #       rows = `Potential of Amendment 4 (direct) to swing the vote` == "Yes"))%>%
-  # tab_style(
-  #   style = list(
-  #     cell_fill(color = "#add8e6"),
-  #     cell_text(weight = "bold")
-  #   ),
-  # locations = cells_data(
-  #   columns = vars(County, `Incumbent party`, `2016 margin of victory`, `Enfranchised voters`, `Potential of Amendment 4 (direct) to swing the vote`, `Potential of Amendment 4 (direct & spillover) to swing the vote`),
-  #   rows = `Potential of Amendment 4 (direct & spillover) to swing the vote` == "Yes"))
-  
-  
-  # table_2 <- Elections_2020_table %>%
-  #   filter(`Potential of Amendment 4 to swing the vote` =="Yes") %>%
-  #   gt()%>%
-  #   tab_header(
-  #     title = "The electoral significance of Amendment 4 in 2020") %>%
-  #   tab_spanner(
-  #     label = "2016 results",
-  #     columns = vars("Incumbent party", "2016 margin of victory")) %>%
-  #   tab_spanner(
-  #     label = "2020 projection",
-  #     columns = vars("Re-enfranchised voters", "Potential of Amendment 4 to swing the vote", "Expected add. margin", "Expected marginal advantage", "Amendment 4 expected to swing vote")) %>%
-  #   tab_style(
-  #     style = list(
-  #       cell_fill(color = "#add8e6"),
-  #       cell_text(weight = "bold")
-  #     ),
-  #     locations = cells_data(
-  #       columns = vars(County, `Incumbent party`, `2016 margin of victory`, `Re-enfranchised voters`, `Potential of Amendment 4 to swing the vote`, `Expected add. margin`, `Expected marginal advantage`, `Amendment 4 expected to swing vote`),
-  #       rows = `Amendment 4 expected to swing vote` == "Yes"))
-  # 
-  # 
-  # gtsave(table_1, "Counties.png")
-  # 
-  #  write.csv(Elections_2020_table, file = "Elections_2020_table.csv")
-  # 
-  # # NEED TO: Add clarifier for total that it is based on the accumulated margin in 2016 and not on the gap in 2016, which was 112911. If that is the basis for assessment, it would not swing.
-  # # Highlight assumptions in table (Note: Highly simplified mehtodology based on Vox article)
-  # 
